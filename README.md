@@ -15,4 +15,5 @@ docker run -d --name cert-checker \
 - SMTP_RELAY - SMTP server (no authentication) that is listening on port 25.
 - NOTIFICATION_EMAIL - Email address to send notifications to.
 - NOTIFICATION_TIME - comma separated list of time-deltas before the cert expires. d=days, m=minutes, s=seconds (default 7d)
-- 
+- SENDER - 'from' email address for the notifications.
+
