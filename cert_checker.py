@@ -8,6 +8,8 @@ import schedule
 import traceback
 import time
 import sys
+from rich.traceback import install
+install(show_locals=True)
 
 
 def check_email(email):
