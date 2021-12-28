@@ -1,15 +1,18 @@
-import OpenSSL
 import ssl
 from datetime import datetime, timedelta
 import re
 import os
 import smtplib
 import schedule
-import traceback
+import ssl
+import socket
 import time
 import sys
 from rich.traceback import install
-install(show_locals=True)
+from rich import Console
+log_locals = (os.environ['LOG_LOCALS'].lower() not in ['y', 't', 'true', 'yes'])
+install(show_locals=log_locals)
+console = Console()
 
 
 def check_email(email):
@@ -28,22 +31,27 @@ def send_email(smtp, sender, receivers, message):
     try:
         smtp_obj = smtplib.SMTP(smtp)
         smtp_obj.sendmail(sender, receivers, message)
-        print("Successfully sent email to " + str(receivers) + "at " + str(datetime.now()), flush=True)
+        console.print("Successfully sent email to " + str(receivers) + "at " + str(datetime.now()))
     except smtplib.SMTPException:
-        print("Failed to send email.", flush=True)
-        print(traceback.format_exc(), flush=True)
+        console.print("Failed to send email.")
+        console.print_exception()
+        console.print(traceback.format_exc())
 
 
 def check_cert(domain):
     try:
-        cert = ssl.get_server_certificate((domain, 443))
-        x509 = OpenSSL.crypto.load_certificate(OpenSSL.crypto.FILETYPE_PEM, cert)
-        expiry_date = datetime.strptime(x509.get_notAfter().decode('utf-8'), '%Y%m%d%H%M%SZ')
+        context = ssl.create_default_context()
+        conn = context.wrap_socket(
+            socket.socket(socket.AF_INET),
+            server_hostname=domain,
+        )
+        conn.connect((domain, 443))
+        ssl_info = conn.getpeercert()
+        expiry_date = datetime.strptime(ssl_info['notAfter'], r'%b %d %H:%M:%S %Y %Z')
         return expiry_date
-    except ssl.SSLError:
-        print('Certificate check failed for: ' + domain, flush=True)
-        print(traceback.format_exc(), flush=True)
-        raise Exception('Certificate check failed.')
+    except:
+        console.print_exception(show_locals=log_locals)
+        raise Exception("Certificate check failed.")
 
 
 def check_schedule(domains, times, smtp_info):
@@ -58,12 +66,12 @@ def check_schedule(domains, times, smtp_info):
                         body = domain + ' certificate will expire on ' + str(exp)
                         send_email(smtp, sender, receivers, message + body)
                         notifications_sent[domain].append(timed)
-                        print(str(datetime.now()) + ' ' + body, flush=True)
+                        console.print(str(datetime.now()) + ' ' + body)
 
 if __name__ == '__main__':
     try:
         domains = os.getenv('DOMAINS').split(',')
-        print(domains, flush=True)
+        console.print(domains)
         smtp = os.getenv('SMTP_RELAY')
         times_str = os.getenv('NOTIFICATION_TIME').split(',')
         times = list()
@@ -93,6 +101,6 @@ if __name__ == '__main__':
             time.sleep(1)
 
     except:
-        print(traceback.format_exc(), flush=True)
+        console.print_exception(show_locals=log_locals)
         sys.exit(1)
 
